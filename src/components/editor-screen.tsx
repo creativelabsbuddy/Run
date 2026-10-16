@@ -85,7 +85,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const frameHtml = useMemo(
-    () => (project?.html ? withAppMemory(project.html, project.appData ?? {}) : ""),
+    () => (project?.html ? withAppMemory(project.html, project.appData ?? {}, project.id) : ""),
     [project?.html, previewOn],
   );
   const [justUpdated, setJustUpdated] = useState(false);
@@ -206,7 +206,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
   const mine = !ownerId || project.ownerId === ownerId;
   const live = listing?.status === "live";
   if (!mine) {
-    return <PreviewOnly title={listing?.title || project.title} html={live ? listing?.html || "" : ""} />;
+    return <PreviewOnly title={listing?.title || project.title} html={live ? withAppMemory(listing?.html || "", {}, project.id) : ""} />;
   }
 
   function persist(next: Project) {

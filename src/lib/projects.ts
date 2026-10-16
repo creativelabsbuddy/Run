@@ -224,10 +224,12 @@ export async function removeProject(id: string): Promise<void> {
   await deleteOwnedProject({ data: id }).catch(() => undefined);
 }
 
-export function withAppMemory(html: string, data: Record<string, string>): string {
+export function withAppMemory(html: string, data: Record<string, string>, projectId = ""): string {
   if (!html.trim()) return html;
   const payload = JSON.stringify(data).replace(/</g, "\\u003c");
-  const script = `<script>(function(){var s=${payload};try{Object.keys(s).forEach(function(k){localStorage.setItem(k,s[k])})}catch(e){}function send(k,v){try{parent.postMessage({type:"run-store",key:k,value:v},"*")}catch(e){}}var put=localStorage.setItem.bind(localStorage);localStorage.setItem=function(k,v){put(k,v);send(k,String(v))};var cut=localStorage.removeItem.bind(localStorage);localStorage.removeItem=function(k){cut(k);send(k,null)}})()</script>`;
+  const api = typeof window !== "undefined" ? window.location.origin : "";
+  const boot = projectId ? `window.RUN_APP={id:${JSON.stringify(projectId)},api:${JSON.stringify(api)}};` : "";
+  const script = `<script>(function(){${boot}var s=${payload};try{Object.keys(s).forEach(function(k){localStorage.setItem(k,s[k])})}catch(e){}function send(k,v){try{parent.postMessage({type:"run-store",key:k,value:v},"*")}catch(e){}}var put=localStorage.setItem.bind(localStorage);localStorage.setItem=function(k,v){put(k,v);send(k,String(v))};var cut=localStorage.removeItem.bind(localStorage);localStorage.removeItem=function(k){cut(k);send(k,null)}})()</script>`;
   return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (tag) => `${tag}${script}`) : script + html;
 }
 

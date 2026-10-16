@@ -117,7 +117,7 @@ function ToolPage() {
     <iframe
       title="Preview"
       sandbox="allow-scripts allow-forms allow-popups"
-      srcDoc={html ? withAppMemory(html, readMemory(loaded.slug)) : "<p></p>"}
+      srcDoc={html ? withAppMemory(html, readMemory(loaded.slug), loaded.slug) : "<p></p>"}
       className="h-dvh w-full border-0 bg-bg"
     />
   );

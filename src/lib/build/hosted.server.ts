@@ -1,4 +1,5 @@
 import { env } from "@/lib/env.server";
+import { looksHeavy } from "@/lib/build-flow";
 
 export type Chain = "free" | "tiny" | "simple" | "medium" | "heavy";
 
@@ -161,8 +162,10 @@ async function writePage(
   const file = input.html
     ? `Selected file ${input.fileName}:\n${input.html.slice(0, 4000)}`
     : "No file yet. Write the first page.";
-  const system =
-    "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
+  const members = looksHeavy(input.brief);
+  const system = members
+    ? "Return one complete HTML document only. No markdown. End with </html>. window.RUN_APP is already on the page. POST window.RUN_APP.api + '/api/apps/' + window.RUN_APP.id with JSON. signup and login send {action, email, password} and return {token}. Save the token and send Authorization: Bearer token. save sends {action:'save', order:{title, detail}}. list sends {action:'list'} and returns {orders:[{id, title, detail, at}]}. Show {error} text. After login, list only this member's orders. Do not keep orders only in the page. One page: login, a form, and the list."
+    : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
   const ask = async (extra: string, maxTokens: number) =>
     extractHtml(
       await complete(
