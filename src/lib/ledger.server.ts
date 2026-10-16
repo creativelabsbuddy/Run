@@ -37,9 +37,26 @@ export async function readLedger(userId: string): Promise<LedgerRow> {
   };
 }
 
-export async function grantPack(userId: string): Promise<LedgerRow> {
+/** A new server has an empty ledger. Keep the Pro balance the browser already has. */
+export async function rememberLedger(
+  userId: string,
+  hint: { credits: number; paid: boolean },
+): Promise<LedgerRow> {
+  const row = await readLedger(userId);
+  const fresh = !row.paid && row.credits <= 15 && row.balance === 0 && row.earnings === 0;
+  const credits = Math.round(Math.min(Math.max(hint.credits, 0), 1000) * 10) / 10;
+  if (fresh && hint.paid && credits > row.credits) {
+    const sql = await getSql();
+    await sql`update ledger set credits = ${credits}, paid = 1 where user_id = ${userId}`;
+    return readLedger(userId);
+  }
+  return row;
+}
+
+export async function grantPack(userId: string, hint?: { credits: number; paid: boolean }): Promise<LedgerRow> {
   const sql = await getSql();
-  await readLedger(userId);
+  if (hint?.paid) await rememberLedger(userId, hint);
+  else await readLedger(userId);
   await sql`update ledger set credits = credits + 120, paid = 1 where user_id = ${userId}`;
   return readLedger(userId);
 }

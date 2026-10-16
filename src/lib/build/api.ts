@@ -12,10 +12,11 @@ export const classifyBuild = createServerFn({ method: "POST" })
 
 export const generateBuild = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => input as { brief: string; fileName: string; html: string; chain?: "free" | "tiny" | "simple" | "medium" | "heavy" })
+  .validator((input: unknown) => input as { brief: string; fileName: string; html: string; chain?: "free" | "tiny" | "simple" | "medium" | "heavy"; credits?: number; paid?: boolean })
   .handler(async ({ data, context }) => {
     const { generate } = await import("./hosted.server");
-    const { forceChain, readLedger, spendCredits } = await import("../ledger.server");
+    const { forceChain, readLedger, rememberLedger, spendCredits } = await import("../ledger.server");
+    await rememberLedger(context.userId, { credits: Number(data.credits) || 0, paid: data.paid === true });
     const chain = await forceChain(context.userId, data.chain ?? "simple");
     const hold = creditCeiling(data.brief, Boolean(data.html));
     const before = await readLedger(context.userId);

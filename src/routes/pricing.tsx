@@ -13,7 +13,7 @@ function PricingPage() {
   const [paid, setPaid] = useState(hasPaidPack);
 
   function buy() {
-    void grantPack()
+    void grantPack({ data: { credits: readCredits(), paid: hasPaidPack() } })
       .then((row) => {
         mirrorLedger(row.credits, row.paid);
         setCredits(row.credits);

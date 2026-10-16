@@ -4,7 +4,7 @@ import { ChevronDown, Folder, Menu, Plus } from "lucide-react";
 import { fieldClass } from "@/components/ui";
 import { signOut } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { claimBrowserProjects, mirrorLedger, readCreditCap, readCredits } from "@/lib/projects";
+import { claimBrowserProjects, hasPaidPack, mirrorLedger, readCreditCap, readCredits } from "@/lib/projects";
 import { readBalance, readEarnings, WALLET_EVENT, writeSlot } from "@/lib/wallet";
 import { getLedger } from "@/lib/ledger-api";
 import {
@@ -92,7 +92,7 @@ export function AccountSlot() {
       setEarnings(readEarnings(user.id));
     }
     sync();
-    void getLedger()
+    void getLedger({ data: { credits: readCredits(), paid: hasPaidPack() } })
       .then((row) => {
         if (!user?.id) return;
         mirrorLedger(row.credits, row.paid);

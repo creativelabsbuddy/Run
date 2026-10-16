@@ -1,18 +1,34 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 
-export const getLedger = createServerFn({ method: "GET" })
+export const getLedger = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
-    const { readLedger } = await import("./ledger.server");
-    return readLedger(context.userId);
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { credits?: number; paid?: boolean };
+    const credits = Number(raw.credits);
+    return {
+      credits: Number.isFinite(credits) ? Math.max(0, Math.min(credits, 1000)) : 0,
+      paid: raw.paid === true,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const { rememberLedger } = await import("./ledger.server");
+    return rememberLedger(context.userId, data);
   });
 
 export const grantPack = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { credits?: number; paid?: boolean };
+    const credits = Number(raw.credits);
+    return {
+      credits: Number.isFinite(credits) ? Math.max(0, Math.min(credits, 1000)) : 0,
+      paid: raw.paid === true,
+    };
+  })
+  .handler(async ({ context, data }) => {
     const { grantPack: grant } = await import("./ledger.server");
-    return grant(context.userId);
+    return grant(context.userId, data);
   });
 
 export const addTestMoney = createServerFn({ method: "POST" })

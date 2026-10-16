@@ -96,7 +96,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
   useEffect(() => {
     const local = readCredits();
     if (local > 0) setCredits(local);
-    void getLedger()
+    void getLedger({ data: { credits: readCredits(), paid: hasPaidPack() } })
       .then((row) => {
         mirrorLedger(row.credits, row.paid);
         setCredits(row.credits);
@@ -274,7 +274,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
   }
 
   async function askModel(current: Project, brief: string, chain: "free" | "tiny" | "simple" | "medium" | "heavy") {
-    const data = { brief, fileName: current.html ? "index.html" : "", html: current.html, chain };
+    const data = { brief, fileName: current.html ? "index.html" : "", html: current.html, chain, credits: readCredits(), paid: hasPaidPack() };
     const once = () =>
       Promise.race([
         generateBuild({ data }),
