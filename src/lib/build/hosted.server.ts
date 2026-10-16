@@ -133,6 +133,33 @@ const WATCHES = [
   "https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?auto=format&fit=crop&w=800&q=80",
 ];
 
+function readFiles(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const pattern = /FILE\s+(index\.html|styles\.css|app\.js)\s*```[a-z]*\s*([\s\S]*?)```/gi;
+  for (const match of raw.matchAll(pattern)) {
+    const name = match[1].toLowerCase();
+    const body = match[2].trim();
+    if (body) out[name] = body;
+  }
+  return out;
+}
+
+function stitch(files: Record<string, string>): string {
+  let html = files["index.html"] || "";
+  if (!html) return "";
+  const css = files["styles.css"];
+  const js = files["app.js"];
+  if (css) {
+    const style = `<style>\n${css}\n</style>`;
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, `${style}\n</head>`) : `${style}\n${html}`;
+  }
+  if (js) {
+    const script = `<script>\n${js}\n</script>`;
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}\n</body>`) : `${html}\n${script}`;
+  }
+  return extractHtml(html);
+}
+
 function withProductPhotos(html: string, brief: string): string {
   if (!/watch|घड़ी|ghadi/i.test(brief)) return html;
   let index = 0;
@@ -143,8 +170,9 @@ export async function generate(input: {
   brief: string;
   fileName: string;
   html: string;
+  files?: Record<string, string>;
   chain?: Chain;
-}): Promise<{ html: string; model: string } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
+}): Promise<{ html: string; model: string; files?: Record<string, string> } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
   const slot = pick(input.chain ?? "simple");
   if (!slot) return { error: "no-key" };
   const page = { ...input, full: input.chain === "medium" };
@@ -158,18 +186,43 @@ export async function generate(input: {
 
 async function writePage(
   slot: Slot,
-  input: { brief: string; fileName: string; html: string; full?: boolean },
-): Promise<{ html: string; model: string } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
-  const full = input.full === true;
+  input: { brief: string; fileName: string; html: string; files?: Record<string, string>; full?: boolean },
+): Promise<{ html: string; model: string; files?: Record<string, string> } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
+  const full = input.full === true && !looksHeavy(input.brief);
+  if (full) {
+    const prior = input.files && Object.keys(input.files).length
+      ? Object.entries(input.files).map(([name, body]) => `FILE ${name}\n${body.slice(0, 6000)}`).join("\n\n")
+      : "No files yet.";
+    const system =
+      "Return only files in this shape, no other text.\nFILE index.html\n```html\n...\n```\nFILE styles.css\n```css\n...\n```\nFILE app.js\n```js\n...\n```\nindex.html is the structure. styles.css is the look. app.js is clicks and forms. Build a real website: nav, hero, at least three sections, footer. Use images.unsplash.com when photos are needed. No login or payment.";
+    try {
+      const raw = await complete(
+        slot,
+        [
+          { role: "system", content: system },
+          { role: "user", content: `${prior}\n\nRequest:\n${input.brief}\n\n${prior === "No files yet." ? "Return all three files. index.html must end with </html>." : "Return only the files this request changes."}` },
+        ],
+        10000,
+      );
+      const changed = readFiles(raw);
+      const files = { ...(input.files || {}), ...changed };
+      const html = stitch(files) || extractHtml(raw);
+      if (!html) return { error: "cut", model: slot.id };
+      return { html: withProductPhotos(html, input.brief), model: slot.id, ...(files["index.html"] ? { files } : {}) };
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "";
+      if (error instanceof Error && error.message === "NO_KEY") return { error: "no-key" };
+      if (name === "TimeoutError" || name === "AbortError") return { error: "timeout", model: slot.id };
+      return { error: "failed", model: slot.id };
+    }
+  }
   const file = input.html
-    ? `Selected file ${input.fileName}:\n${input.html.slice(0, full ? 8000 : 4000)}`
+    ? `Selected file ${input.fileName}:\n${input.html.slice(0, 4000)}`
     : "No file yet. Write the first page.";
   const members = looksHeavy(input.brief);
   const system = members
     ? "Return one complete HTML document only. No markdown. End with </html>. window.RUN_APP is already on the page. POST window.RUN_APP.api + '/api/apps/' + window.RUN_APP.id with JSON. signup and login send {action, email, password} and return {token}. Save the token and send Authorization: Bearer token. save sends {action:'save', order:{title, detail}}. list sends {action:'list'} and returns {orders:[{id, title, detail, at}]}. Show {error} text. After login, list only this member's orders. Do not keep orders only in the page. One page: login, a form, and the list."
-    : full
-      ? "Return one complete HTML document only. No markdown. End with </html>. Build a real website, not a single card. Include a top nav, a large hero, at least three content sections, and a footer. Use a full-page layout, clear type, spacing, and a palette that fits the subject. Use images.unsplash.com photo URLs when the subject needs pictures. Do not add login or payment."
-      : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
+    : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
   const ask = async (extra: string, maxTokens: number) =>
     extractHtml(
       await complete(
@@ -182,8 +235,8 @@ async function writePage(
       ),
     );
   try {
-    let html = await ask(full ? "Write the full website. Several sections, not one card. Close every tag." : "Rewrite the page for this request. One page. Close every tag.", full ? 10000 : 8000);
-    if (!html && !full) {
+    let html = await ask("Rewrite the page for this request. One page. Close every tag.", 8000);
+    if (!html) {
       html = await ask("The last reply was cut off. Write a shorter page, under 100 lines, and end with </html>.", 8000);
     }
     if (!html) return { error: "cut", model: slot.id };

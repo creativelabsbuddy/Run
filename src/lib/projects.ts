@@ -20,7 +20,7 @@ export type ProjectVersion = {
   preview: ProjectPreview | null;
 };
 
-export type ProjectUndo = { html: string };
+export type ProjectUndo = { html: string; files?: Record<string, string> };
 
 export type Project = {
   id: string;
@@ -37,6 +37,7 @@ export type Project = {
   appData: Record<string, string>;
   undo: ProjectUndo | null;
   assets: string[];
+  files: Record<string, string>;
 };
 
 function readAll(): Project[] {
@@ -73,8 +74,9 @@ function asProject(raw: unknown): Project | null {
     build: item.build?.step !== undefined || item.build?.pending !== undefined ? { ...emptyBuild(), ...item.build } : emptyBuild(),
     workspaceId: item.workspaceId || "personal",
     appData: item.appData && typeof item.appData === "object" ? item.appData : {},
-    undo: item.undo?.html ? { html: item.undo.html } : null,
+    undo: item.undo?.html ? { html: item.undo.html, files: item.undo.files } : null,
     assets: Array.isArray(item.assets) ? item.assets.filter((asset) => typeof asset === "string") : [],
+    files: item.files && typeof item.files === "object" ? item.files : {},
   };
 }
 
@@ -124,6 +126,7 @@ export function createProject(ownerId: string, prompt: string): string {
     appData: {},
     undo: null,
     assets: [],
+    files: {},
   });
   writeAll(projects);
   return id;
@@ -170,6 +173,7 @@ export async function startProject(prompt: string, ownerId: string): Promise<str
     appData: {},
     undo: null,
     assets: [],
+    files: {},
   });
   return id;
 }

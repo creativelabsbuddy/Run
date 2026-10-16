@@ -12,7 +12,7 @@ export const classifyBuild = createServerFn({ method: "POST" })
 
 export const generateBuild = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => input as { brief: string; fileName: string; html: string; chain?: "free" | "tiny" | "simple" | "medium" | "heavy"; credits?: number; paid?: boolean })
+  .validator((input: unknown) => input as { brief: string; fileName: string; html: string; files?: Record<string, string>; chain?: "free" | "tiny" | "simple" | "medium" | "heavy"; credits?: number; paid?: boolean })
   .handler(async ({ data, context }) => {
     const { generate } = await import("./hosted.server");
     const { forceChain, readLedger, rememberLedger, spendCredits } = await import("../ledger.server");

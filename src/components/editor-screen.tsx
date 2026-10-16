@@ -215,11 +215,12 @@ export function EditorScreen({ projectId }: { projectId: string }) {
     rememberProject(next);
   }
 
-  function say(current: Project, text: string, build: ProjectBuild, html = current.html) {
+  function say(current: Project, text: string, build: ProjectBuild, html = current.html, files = current.files) {
     const at = new Date().toISOString();
     persist({
       ...current,
       html,
+      files,
       build,
       preview: html ? { heading: current.title.slice(0, 80), button: "Open" } : current.preview,
       messages: [...current.messages, { id: `a-${Date.now()}`, role: "assistant", text }],
@@ -255,26 +256,26 @@ export function EditorScreen({ projectId }: { projectId: string }) {
     setPublishOpen(true);
   }
 
-  function charge(current: Project, before: string, after: string, prompt: string, build: ProjectBuild, note: string, serverCredits?: number) {
+  function charge(current: Project, before: string, after: string, prompt: string, build: ProjectBuild, note: string, serverCredits?: number, files?: Record<string, string>) {
     const cost = creditsUsed(prompt, before, after);
-    const base = before.trim() && before !== after ? { ...current, undo: { html: before } } : current;
+    const base = before.trim() && before !== after ? { ...current, undo: { html: before, files: current.files } } : current;
     if (typeof serverCredits === "number") mirrorLedger(serverCredits, hasPaidPack());
     if (cost <= 0) {
-      say(base, "Credit nahi kata.", { ...build, lastFailed: false, step: null }, after);
+      say(base, "Credit nahi kata.", { ...build, lastFailed: false, step: null }, after, files);
       if (typeof serverCredits === "number") setCredits(serverCredits);
       return;
     }
     if (typeof serverCredits === "number") {
       setCredits(serverCredits);
-      say(base, `${note} ${cost} credit.`, { ...build, lastFailed: false, step: null, planFor: prompt }, after);
+      say(base, `${note} ${cost} credit.`, { ...build, lastFailed: false, step: null, planFor: prompt }, after, files);
       return;
     }
     if (readCredits() < cost) return need(current, cost, build);
-    say(base, `${note} ${cost} credit.`, { ...build, lastFailed: false, step: null, planFor: prompt }, after);
+    say(base, `${note} ${cost} credit.`, { ...build, lastFailed: false, step: null, planFor: prompt }, after, files);
   }
 
   async function askModel(current: Project, brief: string, chain: "free" | "tiny" | "simple" | "medium" | "heavy") {
-    const data = { brief, fileName: current.html ? "index.html" : "", html: current.html, chain, credits: readCredits(), paid: hasPaidPack() };
+    const data = { brief, fileName: current.html ? "index.html" : "", html: current.html, files: current.files, chain, credits: readCredits(), paid: hasPaidPack() };
     const once = () =>
       Promise.race([
         generateBuild({ data }),
@@ -375,7 +376,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
       return;
     }
     const heard = forModel === text ? "" : `Classifier: ${forModel.slice(0, 160)}. `;
-    charge(current, current.html, built, text, state, `${heard}Ban gaya. ${result.model}.`, result.credits);
+    charge(current, current.html, built, text, state, `${heard}Ban gaya. ${result.model}.`, result.credits, result.files);
   }
 
   async function sendText(text: string) {
@@ -446,6 +447,7 @@ export function EditorScreen({ projectId }: { projectId: string }) {
     persist({
       ...current,
       html: current.undo.html,
+      files: current.undo.files ?? current.files,
       undo: null,
       messages: [...current.messages, { id: `a-${Date.now()}`, role: "assistant", text: "Pichhla page wapas aa gaya." }],
       updatedAt: new Date().toISOString(),

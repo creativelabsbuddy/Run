@@ -22,7 +22,20 @@ type Meta = {
   appData?: Record<string, string>;
   undo?: ProjectUndo | null;
   assets?: string[];
+  files?: Record<string, string>;
 };
+
+const FILE_NAMES = ["index.html", "styles.css", "app.js"] as const;
+
+function cleanFiles(files?: Record<string, string>): Record<string, string> {
+  if (!files) return {};
+  const out: Record<string, string> = {};
+  for (const name of FILE_NAMES) {
+    const body = files[name];
+    if (typeof body === "string" && body.trim()) out[name] = body.slice(0, 80000);
+  }
+  return out;
+}
 
 function stamp(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -53,8 +66,9 @@ function toProject(row: Row): Project {
     build: { ...emptyBuild(), ...asJson<Partial<ProjectBuild>>(row.build, {}) },
     workspaceId: meta.workspaceId || "personal",
     appData: meta.appData && typeof meta.appData === "object" ? meta.appData : {},
-    undo: meta.undo?.html ? { html: meta.undo.html } : null,
+    undo: meta.undo?.html ? { html: meta.undo.html, files: cleanFiles(meta.undo.files) } : null,
     assets: Array.isArray(meta.assets) ? meta.assets.filter((asset) => typeof asset === "string").slice(0, 3) : [],
+    files: cleanFiles(meta.files),
   };
 }
 
@@ -62,8 +76,9 @@ function packMeta(data: Project): string {
   return JSON.stringify({
     workspaceId: data.workspaceId || "personal",
     appData: data.appData || {},
-    undo: data.undo?.html ? { html: data.undo.html.slice(0, 500000) } : null,
+    undo: data.undo?.html ? { html: data.undo.html.slice(0, 500000), files: cleanFiles(data.undo.files) } : null,
     assets: (data.assets || []).slice(0, 3),
+    files: cleanFiles(data.files),
   });
 }
 
