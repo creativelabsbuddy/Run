@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Eye, EyeOff } from "lucide-react";
 import { GROK_PROVIDERS, authClient, authEnabled, rememberBearer, signIn } from "@/lib/auth/client";
 import { fieldClass } from "@/components/ui";
 import { claimBrowserProjects, startProject } from "@/lib/projects";
@@ -14,6 +15,7 @@ function Login() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -87,7 +89,26 @@ function Login() {
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" className={fieldClass} />
             ) : null}
             <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required placeholder="Email" autoComplete="email" className={fieldClass} />
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required minLength={8} placeholder="Password" autoComplete={mode === "up" ? "new-password" : "current-password"} className={fieldClass} />
+            <div className="relative">
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={8}
+                placeholder="Password"
+                autoComplete={mode === "up" ? "new-password" : "current-password"}
+                className={`${fieldClass} pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((shown) => !shown)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {error ? <p className="text-sm text-muted">{error}</p> : null}
             <button type="submit" disabled={busy} className="h-11 rounded-full bg-fg text-sm font-medium text-bg disabled:opacity-40">
               {mode === "up" ? "Create account" : "Sign in"}

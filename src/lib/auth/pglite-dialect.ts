@@ -112,6 +112,8 @@ class PGliteConnection implements DatabaseConnection {
     const result = await this.client.query(compiledQuery.sql, [
       ...compiledQuery.parameters,
     ]);
+    const { persistPglite } = await import("../pglite-persist");
+    await persistPglite(this.client, compiledQuery.sql);
     if (result.affectedRows) {
       return {
         numAffectedRows: BigInt(result.affectedRows),

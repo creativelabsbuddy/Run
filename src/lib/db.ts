@@ -162,11 +162,18 @@ async function createPgliteSql(): Promise<Sql> {
   // instead once DATABASE_URL is set.
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
-    const { mkdirSync } = await import("node:fs");
+    const { mkdirSync, rmSync } = await import("node:fs");
     const dataDir = process.env.VERCEL ? "/tmp/run-pglite" : "/workspace/.data/pglite";
     mkdirSync(dataDir, { recursive: true });
+    const { loadPgliteDump } = await import("./pglite-persist");
+    const loadDataDir = process.env.VERCEL ? await loadPgliteDump() : undefined;
+    if (loadDataDir) {
+      rmSync(dataDir, { recursive: true, force: true });
+      mkdirSync(dataDir, { recursive: true });
+    }
     const pg = new PGlite({
       dataDir,
+      ...(loadDataDir ? { loadDataDir } : {}),
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,
@@ -218,6 +225,8 @@ async function createPgliteSql(): Promise<Sql> {
 
   return toSql(async <T>(text: string, params: unknown[]) => {
     const result = await pg.query<T>(text, params);
+    const { persistPglite } = await import("./pglite-persist");
+    await persistPglite(pg, text);
     return result.rows;
   });
 }
