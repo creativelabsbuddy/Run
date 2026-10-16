@@ -9,7 +9,6 @@ import {
   applySimpleEdit,
   creditCeiling,
   creditsUsed,
-  looksLikeSite,
   emptyBuild,
   fileTail,
   routeLocal,
@@ -357,12 +356,6 @@ export function EditorScreen({ projectId }: { projectId: string }) {
           planFor: brief,
         });
         return;
-      }
-      if (hasPaidPack() && looksLikeSite(text)) {
-        tier = tier === "heavy" ? "heavy" : "medium";
-        chain = "medium";
-        forModel = text.trim();
-        brief = forModel;
       }
     }
     const hold = creditCeiling(text, Boolean(current.html));

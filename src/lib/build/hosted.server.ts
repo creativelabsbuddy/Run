@@ -1,5 +1,5 @@
 import { env } from "@/lib/env.server";
-import { looksHeavy, looksLikeSite } from "@/lib/build-flow";
+import { looksHeavy } from "@/lib/build-flow";
 
 export type Chain = "free" | "tiny" | "simple" | "medium" | "heavy";
 
@@ -147,8 +147,9 @@ export async function generate(input: {
 }): Promise<{ html: string; model: string } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
   const slot = pick(input.chain ?? "simple");
   if (!slot) return { error: "no-key" };
-  const first = await writePage(slot, input);
-  if (!("error" in first) || first.error === "cut" || first.error === "no-key" || slot.id === LUNA.id || looksLikeSite(input.brief)) return first;
+  const page = { ...input, full: input.chain === "medium" };
+  const first = await writePage(slot, page);
+  if (!("error" in first) || first.error === "cut" || first.error === "no-key" || slot.id === LUNA.id || page.full) return first;
   const luna = pick("free");
   if (!luna || luna.id === slot.id) return first;
   const second = await writePage(luna, input);
@@ -157,16 +158,16 @@ export async function generate(input: {
 
 async function writePage(
   slot: Slot,
-  input: { brief: string; fileName: string; html: string },
+  input: { brief: string; fileName: string; html: string; full?: boolean },
 ): Promise<{ html: string; model: string } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
-  const site = looksLikeSite(input.brief);
+  const full = input.full === true;
   const file = input.html
-    ? `Selected file ${input.fileName}:\n${input.html.slice(0, site ? 8000 : 4000)}`
+    ? `Selected file ${input.fileName}:\n${input.html.slice(0, full ? 8000 : 4000)}`
     : "No file yet. Write the first page.";
   const members = looksHeavy(input.brief);
   const system = members
     ? "Return one complete HTML document only. No markdown. End with </html>. window.RUN_APP is already on the page. POST window.RUN_APP.api + '/api/apps/' + window.RUN_APP.id with JSON. signup and login send {action, email, password} and return {token}. Save the token and send Authorization: Bearer token. save sends {action:'save', order:{title, detail}}. list sends {action:'list'} and returns {orders:[{id, title, detail, at}]}. Show {error} text. After login, list only this member's orders. Do not keep orders only in the page. One page: login, a form, and the list."
-    : site
+    : full
       ? "Return one complete HTML document only. No markdown. End with </html>. Build a real website, not a single card. Include a top nav, a large hero, at least three content sections, and a footer. Use a full-page layout, clear type, spacing, and a palette that fits the subject. Use images.unsplash.com photo URLs when the subject needs pictures. Do not add login or payment."
       : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
   const ask = async (extra: string, maxTokens: number) =>
@@ -181,8 +182,8 @@ async function writePage(
       ),
     );
   try {
-    let html = await ask(site ? "Write the full website. Several sections, not one card. Close every tag." : "Rewrite the page for this request. One page. Close every tag.", site ? 10000 : 8000);
-    if (!html && !site) {
+    let html = await ask(full ? "Write the full website. Several sections, not one card. Close every tag." : "Rewrite the page for this request. One page. Close every tag.", full ? 10000 : 8000);
+    if (!html && !full) {
       html = await ask("The last reply was cut off. Write a shorter page, under 100 lines, and end with </html>.", 8000);
     }
     if (!html) return { error: "cut", model: slot.id };
