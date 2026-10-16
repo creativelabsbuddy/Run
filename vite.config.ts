@@ -218,6 +218,7 @@ export default defineConfig(({ command, isPreview }) => ({
             // PGLite loads pglite.wasm next to its package. Bundling drops that
             // file and sign-in crashes on Vercel. Trace the whole package.
             traceDeps: ["@electric-sql/pglite*"],
+            routeRules: { "/**": { maxDuration: 60 } },
           }),
         ]
       : []),

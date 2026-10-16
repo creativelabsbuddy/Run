@@ -29,11 +29,16 @@ function pick(chain: Chain): Slot | null {
 }
 
 function extractHtml(raw: string): string {
-  const fenced = raw.match(/```(?:html)?\s*([\s\S]*?)```/i);
-  const text = (fenced?.[1] ?? raw).trim();
+  let text = raw.trim();
+  const fence = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  if (fence?.[1] && /<\/html>/i.test(fence[1])) text = fence[1].trim();
+  else text = text.replace(/```(?:html)?/gi, "").trim();
   const start = text.search(/<!doctype html>|<html[\s>]/i);
   if (start === -1) return "";
-  const doc = text.slice(start).trim();
+  let doc = text.slice(start).trim();
+  const end = doc.search(/<\/html>/i);
+  if (end !== -1) doc = doc.slice(0, end + "</html>".length);
+  else if (/<body[\s>]/i.test(doc) && doc.length > 400) doc = `${doc}\n</body></html>`;
   if (!/<body[\s>]/i.test(doc) || !/<\/html>/i.test(doc)) return "";
   return doc;
 }
@@ -50,7 +55,7 @@ async function complete(slot: Slot, messages: { role: string; content: string }[
         "Content-Type": "application/json",
         ...(slot.via === "openrouter" ? { "HTTP-Referer": "https://run.app", "X-Title": "Run" } : {}),
       },
-      signal: AbortSignal.timeout(maxTokens > 200 ? 28000 : 12000),
+      signal: AbortSignal.timeout(maxTokens > 200 ? 25000 : 12000),
       body: JSON.stringify({
         model: slot.id,
         temperature: 0.2,
@@ -62,8 +67,13 @@ async function complete(slot: Slot, messages: { role: string; content: string }[
     },
   );
   if (!response.ok) throw new Error("FAILED");
-  const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json = (await response.json()) as {
+    choices?: { finish_reason?: string; message?: { content?: string | { text?: string }[] } }[];
+  };
+  const content = json.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("");
+  return "";
 }
 
 export async function classify(input: {
@@ -151,24 +161,24 @@ async function writePage(
   const file = input.html
     ? `Selected file ${input.fileName}:\n${input.html.slice(0, 4000)}`
     : "No file yet. Write the first page.";
-  try {
-    const html = extractHtml(
+  const system =
+    "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
+  const ask = async (extra: string, maxTokens: number) =>
+    extractHtml(
       await complete(
         slot,
         [
-          {
-            role: "system",
-            content:
-              "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. End with </html>.",
-          },
-          {
-            role: "user",
-            content: `${file}\n\nRequest:\n${input.brief}\n\nRewrite the page for this request. One page. Close every tag.`,
-          },
+          { role: "system", content: system },
+          { role: "user", content: `${file}\n\nRequest:\n${input.brief}\n\n${extra}` },
         ],
-        1600,
+        maxTokens,
       ),
     );
+  try {
+    let html = await ask("Rewrite the page for this request. One page. Close every tag.", 8000);
+    if (!html) {
+      html = await ask("The last reply was cut off. Write a shorter page, under 100 lines, and end with </html>.", 8000);
+    }
     if (!html) return { error: "cut", model: slot.id };
     return { html: withProductPhotos(html, input.brief), model: slot.id };
   } catch (error) {
