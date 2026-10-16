@@ -1,5 +1,5 @@
 import { env } from "@/lib/env.server";
-import { looksHeavy } from "@/lib/build-flow";
+import { looksHeavy, looksLikeSite } from "@/lib/build-flow";
 
 export type Chain = "free" | "tiny" | "simple" | "medium" | "heavy";
 
@@ -56,7 +56,7 @@ async function complete(slot: Slot, messages: { role: string; content: string }[
         "Content-Type": "application/json",
         ...(slot.via === "openrouter" ? { "HTTP-Referer": "https://run.app", "X-Title": "Run" } : {}),
       },
-      signal: AbortSignal.timeout(maxTokens > 200 ? 25000 : 12000),
+      signal: AbortSignal.timeout(maxTokens >= 10000 ? 45000 : maxTokens > 200 ? 25000 : 12000),
       body: JSON.stringify({
         model: slot.id,
         temperature: 0.2,
@@ -90,7 +90,7 @@ export async function classify(input: {
         {
           role: "system",
           content:
-            'Understand what the user wants, in Hindi or English. Reply with JSON only, no code: {"tier":1,"task":"..."}. tier 1 is a small page or a small change. tier 2 is a fuller page. tier 3 is payment, login, or a database. task is only WHAT to make, in the user\'s own words: the names, the items, and the counts they asked for. Do not say how to design it, which layout to use, or how to code it. Under 40 words.',
+            'Understand what the user wants, in Hindi or English. Reply with JSON only, no code: {"tier":1,"task":"..."}. tier 1 is a small change to an existing page. tier 2 is a new website, landing page, or a fuller page. tier 3 is payment, login, or a database. task is only WHAT to make, in the user\'s own words: the names, the items, and the counts they asked for. Do not say how to design it, which layout to use, or how to code it. Under 40 words.',
         },
         {
           role: "user",
@@ -148,7 +148,7 @@ export async function generate(input: {
   const slot = pick(input.chain ?? "simple");
   if (!slot) return { error: "no-key" };
   const first = await writePage(slot, input);
-  if (!("error" in first) || first.error === "cut" || first.error === "no-key" || slot.id === LUNA.id) return first;
+  if (!("error" in first) || first.error === "cut" || first.error === "no-key" || slot.id === LUNA.id || looksLikeSite(input.brief)) return first;
   const luna = pick("free");
   if (!luna || luna.id === slot.id) return first;
   const second = await writePage(luna, input);
@@ -159,13 +159,16 @@ async function writePage(
   slot: Slot,
   input: { brief: string; fileName: string; html: string },
 ): Promise<{ html: string; model: string } | { error: "no-key" | "failed" | "timeout" | "cut"; model?: string }> {
+  const site = looksLikeSite(input.brief);
   const file = input.html
-    ? `Selected file ${input.fileName}:\n${input.html.slice(0, 4000)}`
+    ? `Selected file ${input.fileName}:\n${input.html.slice(0, site ? 8000 : 4000)}`
     : "No file yet. Write the first page.";
   const members = looksHeavy(input.brief);
   const system = members
     ? "Return one complete HTML document only. No markdown. End with </html>. window.RUN_APP is already on the page. POST window.RUN_APP.api + '/api/apps/' + window.RUN_APP.id with JSON. signup and login send {action, email, password} and return {token}. Save the token and send Authorization: Bearer token. save sends {action:'save', order:{title, detail}}. list sends {action:'list'} and returns {orders:[{id, title, detail, at}]}. Show {error} text. After login, list only this member's orders. Do not keep orders only in the page. One page: login, a form, and the list."
-    : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
+    : site
+      ? "Return one complete HTML document only. No markdown. End with </html>. Build a real website, not a single card. Include a top nav, a large hero, at least three content sections, and a footer. Use a full-page layout, clear type, spacing, and a palette that fits the subject. Use images.unsplash.com photo URLs when the subject needs pictures. Do not add login or payment."
+      : "Return one complete HTML document only. No markdown. You decide the layout, colors, and type. Follow the request. Do not add login, payment, or extra pages. Keep it one short page and end with </html>.";
   const ask = async (extra: string, maxTokens: number) =>
     extractHtml(
       await complete(
@@ -178,8 +181,8 @@ async function writePage(
       ),
     );
   try {
-    let html = await ask("Rewrite the page for this request. One page. Close every tag.", 8000);
-    if (!html) {
+    let html = await ask(site ? "Write the full website. Several sections, not one card. Close every tag." : "Rewrite the page for this request. One page. Close every tag.", site ? 10000 : 8000);
+    if (!html && !site) {
       html = await ask("The last reply was cut off. Write a shorter page, under 100 lines, and end with </html>.", 8000);
     }
     if (!html) return { error: "cut", model: slot.id };

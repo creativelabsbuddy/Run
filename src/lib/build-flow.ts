@@ -38,6 +38,10 @@ export function creditsUsed(prompt: string, before: string, after: string): numb
   return 0.9;
 }
 
+export function looksLikeSite(text: string): boolean {
+  return /(landing\s*page|website|web\s*site|webpage|home\s*page|brand|portfolio|storefront)/i.test(text);
+}
+
 export function looksHollow(text: string): boolean {
   const t = text.trim().toLowerCase().replace(/[.?!]/g, "");
   if (!t || t.length > 80 || looksHeavy(t)) return false;
